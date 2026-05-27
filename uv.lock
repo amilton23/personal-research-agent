@@ -1,0 +1,16 @@
+
+# Create a Python environment with UV
+[env]
+
+packages =
+    langgraph
+    pandas
+    numpy
+    matplotlib
+    scipy
+    requests
+    networkx
+    langchain
+    langchain-models
+    langchain-openai
+    langchain-google-genai
