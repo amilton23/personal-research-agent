@@ -6,8 +6,8 @@ This project is a multi-agent solution for gathering corporative and academic re
 
 ```
 multi_agent_healthcare_research/
-├── configs/
-│   └── config.yaml.example
+├── .env/
+│   └── config.yaml
 ├── data/
 │   ├── processed/
 │   └── raw/
@@ -101,9 +101,9 @@ multi_agent_healthcare_research/
     ```
 3.  Set up the configuration file:
     ```bash
-    cp configs/config.yaml.example configs/config.yaml
+    cp .env/config.yaml.example .env/config.yaml
     ```
-4.  Add your API keys to `configs/config.yaml`.
+4.  Add your API keys to `.env/config.yaml`.
 5.  Run the multi-agent system:
     ```bash
     python main.py "your research query"

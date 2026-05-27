@@ -14,3 +14,4 @@ packages =
     langchain-models
     langchain-openai
     langchain-google-genai
+    just
