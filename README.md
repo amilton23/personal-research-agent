@@ -5,9 +5,9 @@ This project is a multi-agent solution for gathering corporative and academic re
 ## Project Structure
 
 ```
-multi_agent_healthcare_research/
+personal-research-agent/
 ├── .env/
-│   └── config.yaml
+│   └── .env
 ├── data/
 │   ├── processed/
 │   └── raw/
@@ -93,7 +93,7 @@ multi_agent_healthcare_research/
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/your-username/multi-agent-healthcare-research.git
+    git clone https://github.com/your-username/personal-research-agent.git
     ```
 2.  Install the dependencies:
     ```bash
@@ -101,9 +101,9 @@ multi_agent_healthcare_research/
     ```
 3.  Set up the configuration file:
     ```bash
-    cp .env/config.yaml.example .env/config.yaml
+    cp .env/.env.example .env/.env
     ```
-4.  Add your API keys to `.env/config.yaml`.
+4.  Add your API keys to `.env/.env`.
 5.  Run the multi-agent system:
     ```bash
     python main.py "your research query"
