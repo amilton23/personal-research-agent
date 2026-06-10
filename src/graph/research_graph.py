@@ -8,6 +8,10 @@ from src.agents.academic_researcher import academic_researcher_node
 from src.agents.corporate_researcher import corporate_researcher_node
 from src.llm_providers.openai import get_openai_llm
 
+#######################
+# CLASS
+#######################
+
 class ResearchState(TypedDict):
     query: str
     sources: list[str]
@@ -15,6 +19,9 @@ class ResearchState(TypedDict):
     final_report: str
     messages: Annotated[list[BaseMessage], operator.add]
 
+#######################
+# FUNCTIONS
+#######################
 
 def start_query_node(state: ResearchState) -> dict:
     return {"messages": [HumanMessage(content=state["query"])]}
@@ -35,8 +42,8 @@ def summarize_node(state: ResearchState) -> dict:
 
 def evaluate_node(state: ResearchState) -> dict:
     """
-    Avalia se a pesquisa é suficiente.
-    Popula 'summary' com uma flag para needs_more_research inspecionar.
+    Evaluates if the research is sufficient.
+    Populates 'summary' with a flag for needs_more_research to inspect.
     """
     last_content = state["final_report"].lower()
     is_sufficient = (
