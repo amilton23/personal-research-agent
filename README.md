@@ -63,3 +63,8 @@ python main.py "corporate and academic research on AI in healthcare"
 - `src/tools/web_search.py` - live web search helper with freshness + URL reachability checks
 - `src/utils/langsmith.py` - safe LangSmith tracing bootstrap/validation
 - `src/llm_providers/` - OpenRouter-backed model factories
+
+## **Next steps:**
+1. Improve LangSmith traceability - summarizer node not showing on the human tests (Langsmith Studio).
+2. Improve LangSmith traceability - LangGraph Chain not visually working, even with everything running OK.
+3. Add MCP protocol to connect to my e-mails and perform context to the research according to my profile (or an specific profile).
