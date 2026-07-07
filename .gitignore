@@ -242,3 +242,15 @@ nohup.out
 *logs
 *cache
 *config
+/.env/*
+\.env\*
+# gitignore template for LangChain products, e.g., LangGraph, LangSmith
+# website: https://www.langchain.com/
+# website: https://www.langchain.com/langgraph
+
+# LangGraph-
+.langgraph_api/
+**/.langgraph_api/
+
+uv.lock
+uv/
