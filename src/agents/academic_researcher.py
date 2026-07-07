@@ -1,18 +1,38 @@
+from __future__ import annotations
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from src.llm_providers.gemini import get_gemini_llm
-from langchain_core.messages import SystemMessage
+from src.tools.web_search import format_results, search_web
 
 _llm = get_gemini_llm()
 
-instructions = (
-    "You are an expert in searching academic papers, articles, and scholarly content about AI in healthcare. "
-    "Always cite sources, authors, and publication dates. "
-    "Focus on peer-reviewed journals, conferences (NeurIPS, MICCAI, AAAI), and preprint servers like arXiv."
+INSTRUCTIONS = (
+    "You are an academic AI healthcare researcher. "
+    "Use only the provided sources, prioritizing recent and reachable sources. "
+    "If older studies are used, explicitly justify their relevance. "
+    "Return concise bullet points with citations [title - url]."
 )
 
+
 def academic_researcher_node(state: dict) -> dict:
-    messages = [
-        SystemMessage(content=instructions),
-        *state["messages"],
-    ]
-    response = _llm.invoke(messages)
-    return {"messages": [response]}
+    query = state["query"]
+    sources = search_web(
+        f"{query} site:arxiv.org OR site:nature.com OR site:nih.gov OR site:thelancet.com OR site:nejm.org OR site:bmj.com",
+        max_results=12,
+        recent=True,
+        verify_urls=True,
+    )
+
+    prompt = (
+        f"Research question: {query}\n\n"
+        "Academic web findings:\n"
+        f"{format_results(sources)}\n\n"
+        "Task: summarize key academic evidence (methods, outcomes, limitations), emphasizing the most recent findings."
+    )
+
+    response = _llm.invoke([SystemMessage(content=INSTRUCTIONS), HumanMessage(content=prompt)])
+    return {
+        "messages": [response],
+        "sources": [item.url for item in sources],
+    }

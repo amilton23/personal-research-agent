@@ -1,110 +1,65 @@
-# Multi-Agent Solution for AI in Healthcare Research
+# Personal Research Agent (AI in Healthcare)
 
-This project is a multi-agent solution for gathering corporative and academic research on AI for healthcare. It uses LangGraph to orchestrate the agents and leverages two LLM providers: OpenAI and Gemini.
+Simple multi-agent workflow for gathering **academic** and **corporate** internet research about AI in healthcare.
 
-## Project Structure
+## What it does
 
-```
-personal-research-agent/
-├── .env/
-│   └── .env
-├── data/
-│   ├── processed/
-│   └── raw/
-├── notebooks/
-│   └── 01_initial_research.ipynb
-├── src/
-│   ├── agents/
-│   │   ├── __init__.py
-│   │   ├── academic_researcher.py
-│   │   └── corporate_researcher.py
-│   ├── graph/
-│   │   ├── __init__.py
-│   │   └── research_graph.py
-│   ├── llm_providers/
-│   │   ├── __init__.py
-│   │   ├── gemini.py
-│   │   └── openai.py
-│   ├── tools/
-│   │   ├── __init__.py
-│   │   └── web_search.py
-│   └── utils/
-│       ├── __init__.py
-│       └── file_utils.py
-├── tests/
-│   ├── __init__.py
-│   ├── agents/
-│   │   └── test_academic_researcher.py
-│   └── tools/
-│       └── test_web_search.py
-└── README.md
+- Uses **LangGraph** to orchestrate two agents in parallel.
+- Uses **OpenRouter** as provider for both model families:
+  - OpenAI model (corporate analysis + final synthesis)
+  - Gemini model (academic analysis)
+- Uses a live web search utility (DuckDuckGo Lite + HTML fallback parsing).
+- Prioritizes recent and reachable links to reduce stale references.
+- Produces a single final report with references.
+
+## Architecture
+
+1. `start_query`
+2. Parallel fan-out:
+   - `academic_researcher` (Gemini via OpenRouter)
+   - `corporate_researcher` (OpenAI via OpenRouter)
+3. `summarize` (OpenAI via OpenRouter)
+4. End
+
+This keeps the design intentionally minimal (YAGNI) and with clear responsibilities (SOLID).
+
+## Setup
+
+1. Install dependencies:
+
+```bash
+pip install -e .
 ```
 
-## Development Plan
+2. Create `.env/.env` with at least:
 
-### Phase 1: Setup and Configuration
+```env
+OPENROUTER_API_KEY=your_key_here
 
-1.  **Project Initialization**: Set up the project structure and initialize a Git repository.
-2.  **LLM Provider Integration**:
-    *   Implement the `OpenAI` and `Gemini` connectors in the `src/llm_providers/` directory.
-    *   Create a configuration file `configs/config.yaml` to store API keys and other settings. Add `configs/config.yaml` to `.gitignore`.
-3.  **Basic Tooling**:
-    *   Implement a basic web search tool in `src/tools/web_search.py`. This tool will be used by the agents to search for information on the web.
+# Optional model config
+# OPENROUTER_OPENAI_MODEL=openai/gpt-4o-mini
+# GEMINI_FOUNDATION_MODEL=google/gemini-3.1-flash-lite
+# OPENROUTER_HTTP_REFERER=https://your-app-url
+# OPENROUTER_APP_TITLE=Personal Research Agent
 
-### Phase 2: Agent Development
+# Optional LangSmith tracing (recommended only with a valid dedicated key)
+# LANGSMITH_TRACING=true
+# LANGSMITH_API_KEY=lsv2_pt_xxx
+# LANGSMITH_PROJECT=personal-research-agent
+# LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+```
 
-1.  **Academic Research Agent**:
-    *   Develop the `academic_researcher` agent in `src/agents/academic_researcher.py`.
-    *   This agent will be responsible for searching for academic papers, articles, and other scholarly content.
-    *   It will use the web search tool to find relevant information and will be able to extract key information from the search results.
-2.  **Corporate Research Agent**:
-    *   Develop the `corporate_researcher` agent in `src/agents/corporate_researcher.py`.
-    *   This agent will be responsible for searching for corporate blogs, news articles, and other industry-related content.
-    *   It will use the web search tool to find relevant information and will be able to extract key information from the search results.
+## Run
 
-### Phase 3: Graph Implementation
+```bash
+python main.py "corporate and academic research on AI in healthcare"
+```
 
-1.  **Research Graph**:
-    *   Implement the `research_graph` in `src/graph/research_graph.py`.
-    *   This graph will define the workflow of the multi-agent system.
-    *   It will start with a user query, then the academic and corporate research agents will work in parallel to gather information.
-    *   The graph will then have a step to synthesize the information from both agents and generate a final report.
+## Main files
 
-### Phase 4: Testing and Evaluation
-
-1.  **Unit Tests**:
-    *   Write unit tests for the tools and agents in the `tests/` directory.
-2.  **Integration Tests**:
-    *   Write integration tests for the research graph to ensure that the agents are working together as expected.
-3.  **Evaluation**:
-    *   Evaluate the performance of the multi-agent system on a set of test queries.
-    *   The evaluation will focus on the quality of the generated reports and the efficiency of the system.
-
-### Phase 5: Deployment and Production
-
-1.  **API**:
-    *   Expose the multi-agent system as an API using a web framework like FastAPI.
-2.  **Deployment**:
-    *   Deploy the multi-agent system to a cloud provider like AWS or GCP.
-3.  **Monitoring**:
-    *   Set up monitoring and logging to track the performance of the system in production.
-
-## Getting Started
-
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/your-username/personal-research-agent.git
-    ```
-2.  Install the dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-3.  Set up the configuration file:
-    ```bash
-    cp .env/.env.example .env/.env
-    ```
-4.  Add your API keys to `.env/.env`.
-5.  Run the multi-agent system:
-    ```bash
-    python main.py "your research query"
-    ```
+- `src/graph/research_graph.py` - workflow orchestration
+- `src/agents/academic_researcher.py` - academic agent
+- `src/agents/corporate_researcher.py` - corporate agent
+- `src/tools/web_search.py` - live web search helper with freshness + URL reachability checks
+- `src/utils/langsmith.py` - safe LangSmith tracing bootstrap/validation
+- `src/llm_providers/` - OpenRouter-backed model factories

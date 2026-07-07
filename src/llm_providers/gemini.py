@@ -1,12 +1,13 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from dotenv import load_dotenv
-from pathlib import Path
+"""Gemini-family models served via OpenRouter."""
 
-API_PATH = Path(__file__).parents[2] / ".env" / ".env"
+from __future__ import annotations
 
-load_dotenv(dotenv_path=API_PATH)
+import os
 
-GEMINI_FOUNDATION_MODEL = "gemini-3.5-flash"
+from . import build_openrouter_chat
 
-def get_gemini_llm(model: str = GEMINI_FOUNDATION_MODEL) -> ChatGoogleGenerativeAI:
-    return ChatGoogleGenerativeAI(model=model, temperature=0)
+GEMINI_DEFAULT_MODEL = os.getenv("GEMINI_FOUNDATION_MODEL", "google/gemini-3.1-flash-lite")
+
+
+def get_gemini_llm(model: str = GEMINI_DEFAULT_MODEL, temperature: float = 0):
+    return build_openrouter_chat(model=model, temperature=temperature)

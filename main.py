@@ -1,16 +1,23 @@
 import sys
-from src.graph.research_graph import research_graph, ResearchState
+
+from src.graph.research_graph import research_graph
 
 
-def main():
-    query = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "AI applications in healthcare 2026"
+def main() -> None:
+    query = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "AI applications in healthcare"
 
     print(f"\nResearch query: {query}\n")
 
-    initial_state = ResearchState(query=query)
-    result = research_graph.invoke(initial_state)
+    result = research_graph.invoke(
+        {
+            "query": query,
+            "sources": [],
+            "messages": [],
+            "final_report": "",
+        }
+    )
 
-    print("\nFinal Report:\n")
+    print("Final Report:\n")
     print(result["final_report"])
 
 

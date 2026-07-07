@@ -1,16 +1,13 @@
-from langchain_openai import ChatOpenAI
-from dotenv import load_dotenv, find_dotenv
+"""OpenAI-family models served via OpenRouter."""
+
+from __future__ import annotations
+
 import os
 
-load_dotenv(find_dotenv())
+from . import build_openrouter_chat
 
-OPENROUTER_FOUNDATION_MODEL = "openai/gpt-4o"
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENAI_DEFAULT_MODEL = os.getenv("OPENROUTER_OPENAI_MODEL", "openai/gpt-4o-mini")
 
-def get_openrouter_llm(model: str = OPENROUTER_FOUNDATION_MODEL) -> ChatOpenAI:
-    return ChatOpenAI(
-        model=model,
-        temperature=0,
-        base_url=OPENROUTER_BASE_URL,
-        api_key=os.environ["OPENROUTER_API_KEY"],
-    )
+
+def get_openai_llm(model: str = OPENAI_DEFAULT_MODEL, temperature: float = 0):
+    return build_openrouter_chat(model=model, temperature=temperature)
