@@ -23,6 +23,7 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 logger = get_logger(__name__, level=logging.DEBUG)
 
+
 def build_openrouter_chat(model: str, temperature: float = 0) -> ChatOpenAI:
     """Return a ChatOpenAI client pointing to OpenRouter."""
     logger.debug(f"Building ChatOpenAI client for model: {model}")
@@ -45,9 +46,19 @@ def build_openrouter_chat(model: str, temperature: float = 0) -> ChatOpenAI:
 
     # OpenRouter call path only. Disable LangSmith callbacks when tracing disabled,
     # preventing background multipart ingest errors from propagating/log-spamming.
-    if os.getenv("LANGSMITH_TRACING", "false").strip().lower() != "true":
+    tracing_enabled = os.getenv("LANGSMITH_TRACING", "false").strip().lower() == "true"
+    if not tracing_enabled:
         os.environ["LANGCHAIN_TRACING_V2"] = "false"
         os.environ["LANGSMITH_TRACING_V2"] = "false"
+
+    logger.debug(
+        "LLM client config | model=%s temperature=%s tracing=%s referer=%s title=%s",
+        model,
+        temperature,
+        tracing_enabled,
+        bool(referer),
+        bool(title),
+    )
 
     return ChatOpenAI(
         model=model,

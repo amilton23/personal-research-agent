@@ -13,7 +13,11 @@ from urllib.parse import parse_qs, unquote, urlparse
 import requests
 from dotenv import find_dotenv, load_dotenv
 
+from src.utils.logs import get_logger
+
 load_dotenv(find_dotenv())
+
+logger = get_logger(__name__)
 
 DUCKDUCKGO_LITE_URL = "https://lite.duckduckgo.com/lite/"
 DUCKDUCKGO_HTML_URL = "https://html.duckduckgo.com/html/"
@@ -45,41 +49,83 @@ def search_web(
     3) dedupe + freshness ranking + strict recency preference
     4) optional reachability checks
     """
+    logger.info(
+        "search_web start | query=%r max_results=%s recent=%s verify_urls=%s",
+        query,
+        max_results,
+        recent,
+        verify_urls,
+    )
+
     if not query.strip():
+        logger.warning("search_web received empty query")
         return []
 
     query_variants = _build_query_variants(query, recent=recent)
 
     collected: list[SearchResult] = []
     for variant in query_variants:
-        # Preferred path: Tavily API (stable JSON, better for "live" usage).
-        collected.extend(_fetch_tavily(variant, max_results=max_results, timeout=timeout))
+        logger.debug("search_web variant=%r", variant)
 
-        # Fallback path: Google News RSS (usually resilient for fresh web signals).
-        if len(collected) < max_results:
-            collected.extend(_fetch_google_news_rss(variant, max_results=max_results, timeout=timeout))
+        tavily_items = _fetch_tavily(variant, max_results=max_results, timeout=timeout)
+        logger.debug(
+            "tavily returned %s results for variant=%r", len(tavily_items), variant
+        )
+        collected.extend(tavily_items)
 
-        # Last fallback path: DuckDuckGo HTML endpoints.
         if len(collected) < max_results:
-            collected.extend(_fetch_duckduckgo_lite(variant, max_results=max_results, timeout=timeout))
+            google_items = _fetch_google_news_rss(
+                variant, max_results=max_results, timeout=timeout
+            )
+            logger.debug(
+                "google_news returned %s results for variant=%r",
+                len(google_items),
+                variant,
+            )
+            collected.extend(google_items)
+
         if len(collected) < max_results:
-            collected.extend(_fetch_duckduckgo_html(variant, max_results=max_results, timeout=timeout))
+            ddg_lite_items = _fetch_duckduckgo_lite(
+                variant, max_results=max_results, timeout=timeout
+            )
+            logger.debug(
+                "ddg_lite returned %s results for variant=%r",
+                len(ddg_lite_items),
+                variant,
+            )
+            collected.extend(ddg_lite_items)
+        if len(collected) < max_results:
+            ddg_html_items = _fetch_duckduckgo_html(
+                variant, max_results=max_results, timeout=timeout
+            )
+            logger.debug(
+                "ddg_html returned %s results for variant=%r",
+                len(ddg_html_items),
+                variant,
+            )
+            collected.extend(ddg_html_items)
 
     results = _dedupe_results(collected)
+    logger.info("search_web collected=%s deduped=%s", len(collected), len(results))
     if not results:
+        logger.warning("search_web found no results after dedupe")
         return []
 
     if recent:
-        results = sorted(results, key=lambda r: _freshness_score(r, query), reverse=True)
+        results = sorted(
+            results, key=lambda r: _freshness_score(r, query), reverse=True
+        )
         results = _prefer_recent_results(results, max_results=max_results)
 
     if verify_urls:
         checked = [_with_reachability(item, timeout=8) for item in results]
+        logger.debug("search_web reachability checked for %s results", len(checked))
         reachable_items = [item for item in checked if item.reachable]
-        # If we have reachable results, keep only them.
         results = reachable_items if reachable_items else checked
 
-    return results[:max_results]
+    final_results = results[:max_results]
+    logger.info("search_web returning %s results", len(final_results))
+    return final_results
 
 
 def format_results(results: list[SearchResult]) -> str:
@@ -89,7 +135,11 @@ def format_results(results: list[SearchResult]) -> str:
     lines: list[str] = []
     for item in results:
         availability = (
-            "reachable" if item.reachable is True else "unverified" if item.reachable is None else "unreachable"
+            "reachable"
+            if item.reachable is True
+            else "unverified"
+            if item.reachable is None
+            else "unreachable"
         )
         lines.append(
             f"- {item.title}\n"
@@ -111,6 +161,7 @@ def _build_query_variants(query: str, recent: bool) -> list[str]:
 def _fetch_tavily(query: str, max_results: int, timeout: int) -> list[SearchResult]:
     api_key = (os.getenv("TAVILY_API_KEY") or "").strip()
     if not api_key:
+        logger.debug("TAVILY_API_KEY not set; skipping Tavily search")
         return []
 
     payload = {
@@ -126,10 +177,13 @@ def _fetch_tavily(query: str, max_results: int, timeout: int) -> list[SearchResu
     headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT}
 
     try:
-        response = requests.post(TAVILY_SEARCH_URL, json=payload, headers=headers, timeout=timeout)
+        response = requests.post(
+            TAVILY_SEARCH_URL, json=payload, headers=headers, timeout=timeout
+        )
         response.raise_for_status()
         data = response.json()
-    except (requests.RequestException, ValueError):
+    except (requests.RequestException, ValueError) as exc:
+        logger.debug("Tavily request failed for query=%r: %s", query, exc)
         return []
 
     items = data.get("results") or []
@@ -143,21 +197,30 @@ def _fetch_tavily(query: str, max_results: int, timeout: int) -> list[SearchResu
     return output
 
 
-def _fetch_google_news_rss(query: str, max_results: int, timeout: int) -> list[SearchResult]:
+def _fetch_google_news_rss(
+    query: str, max_results: int, timeout: int
+) -> list[SearchResult]:
     rss_url = "https://news.google.com/rss/search"
     params = {"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"}
 
     try:
-        response = requests.get(rss_url, params=params, timeout=timeout, headers={"User-Agent": USER_AGENT})
+        response = requests.get(
+            rss_url, params=params, timeout=timeout, headers={"User-Agent": USER_AGENT}
+        )
         response.raise_for_status()
         xml = response.text
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        logger.debug("Google News RSS request failed for query=%r: %s", query, exc)
         return []
 
     items = re.findall(r"<item>(.*?)</item>", xml, flags=re.S | re.I)
     output: list[SearchResult] = []
     for block in items[:max_results]:
-        title_match = re.search(r"<title><!\[CDATA\[(.*?)\]\]></title>|<title>(.*?)</title>", block, flags=re.S | re.I)
+        title_match = re.search(
+            r"<title><!\[CDATA\[(.*?)\]\]></title>|<title>(.*?)</title>",
+            block,
+            flags=re.S | re.I,
+        )
         link_match = re.search(r"<link>(.*?)</link>", block, flags=re.S | re.I)
         desc_match = re.search(
             r"<description><!\[CDATA\[(.*?)\]\]></description>|<description>(.*?)</description>",
@@ -169,7 +232,11 @@ def _fetch_google_news_rss(query: str, max_results: int, timeout: int) -> list[S
 
         title = _clean_html(title_match.group(1) or title_match.group(2) or "")
         url = html.unescape((link_match.group(1) or "").strip())
-        snippet = _clean_html(desc_match.group(1) or desc_match.group(2) or "") if desc_match else ""
+        snippet = (
+            _clean_html(desc_match.group(1) or desc_match.group(2) or "")
+            if desc_match
+            else ""
+        )
 
         if title and url:
             output.append(SearchResult(title=title, url=url, snippet=snippet))
@@ -177,7 +244,9 @@ def _fetch_google_news_rss(query: str, max_results: int, timeout: int) -> list[S
     return output
 
 
-def _fetch_duckduckgo_lite(query: str, max_results: int, timeout: int) -> list[SearchResult]:
+def _fetch_duckduckgo_lite(
+    query: str, max_results: int, timeout: int
+) -> list[SearchResult]:
     try:
         response = requests.get(
             DUCKDUCKGO_LITE_URL,
@@ -186,13 +255,16 @@ def _fetch_duckduckgo_lite(query: str, max_results: int, timeout: int) -> list[S
             headers={"User-Agent": USER_AGENT},
         )
         response.raise_for_status()
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        logger.debug("DuckDuckGo lite request failed for query=%r: %s", query, exc)
         return []
 
     return list(_parse_lite_html(response.text, max_results=max_results))
 
 
-def _fetch_duckduckgo_html(query: str, max_results: int, timeout: int) -> list[SearchResult]:
+def _fetch_duckduckgo_html(
+    query: str, max_results: int, timeout: int
+) -> list[SearchResult]:
     try:
         response = requests.get(
             DUCKDUCKGO_HTML_URL,
@@ -201,7 +273,8 @@ def _fetch_duckduckgo_html(query: str, max_results: int, timeout: int) -> list[S
             headers={"User-Agent": USER_AGENT},
         )
         response.raise_for_status()
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        logger.debug("DuckDuckGo html request failed for query=%r: %s", query, exc)
         return []
 
     return list(_parse_ddg_html(response.text, max_results=max_results))
@@ -249,7 +322,9 @@ def _parse_lite_html(page_html: str, max_results: int) -> Iterable[SearchResult]
 
 
 def _parse_ddg_html(page_html: str, max_results: int) -> Iterable[SearchResult]:
-    result_blocks = re.findall(r"<div class=\"result\".*?</div>\s*</div>", page_html, flags=re.S | re.I)
+    result_blocks = re.findall(
+        r"<div class=\"result\".*?</div>\s*</div>", page_html, flags=re.S | re.I
+    )
 
     emitted = 0
     for block in result_blocks:
@@ -272,11 +347,17 @@ def _parse_ddg_html(page_html: str, max_results: int) -> Iterable[SearchResult]:
 
         raw_href = html.unescape(title_match.group(1))
         title = _clean_html(title_match.group(2))
-        snippet_raw = snippet_match.group(1) if snippet_match and snippet_match.group(1) else (
-            snippet_match.group(2) if snippet_match else ""
+        snippet_raw = (
+            snippet_match.group(1)
+            if snippet_match and snippet_match.group(1)
+            else (snippet_match.group(2) if snippet_match else "")
         )
 
-        yield SearchResult(title=title, url=_resolve_result_url(raw_href), snippet=_clean_html(snippet_raw))
+        yield SearchResult(
+            title=title,
+            url=_resolve_result_url(raw_href),
+            snippet=_clean_html(snippet_raw),
+        )
         emitted += 1
 
 
@@ -318,17 +399,23 @@ def _canonical_url(url: str) -> str:
 
 def _with_reachability(item: SearchResult, timeout: int) -> SearchResult:
     reachable = _is_reachable(item.url, timeout=timeout)
-    return SearchResult(title=item.title, url=item.url, snippet=item.snippet, reachable=reachable)
+    return SearchResult(
+        title=item.title, url=item.url, snippet=item.snippet, reachable=reachable
+    )
 
 
 def _is_reachable(url: str, timeout: int) -> bool:
     headers = {"User-Agent": USER_AGENT}
     try:
-        resp = requests.head(url, timeout=timeout, allow_redirects=True, headers=headers)
+        resp = requests.head(
+            url, timeout=timeout, allow_redirects=True, headers=headers
+        )
         if resp.status_code < 400:
             return True
         if resp.status_code in {403, 405}:
-            fallback = requests.get(url, timeout=timeout, allow_redirects=True, headers=headers)
+            fallback = requests.get(
+                url, timeout=timeout, allow_redirects=True, headers=headers
+            )
             return fallback.status_code < 400
         return False
     except requests.RequestException:
@@ -349,22 +436,54 @@ def _freshness_score(item: SearchResult, query: str) -> int:
     snippet_l = item.snippet.lower()
     url_l = item.url.lower()
 
-    if any(token in title_l for token in ("latest", "news", "update", str(year), str(year - 1))):
+    if any(
+        token in title_l
+        for token in ("latest", "news", "update", str(year), str(year - 1))
+    ):
         score += 4
-    if any(token in snippet_l for token in ("latest", "news", "update", "today", "recent", "breaking")):
+    if any(
+        token in snippet_l
+        for token in ("latest", "news", "update", "today", "recent", "breaking")
+    ):
         score += 2
-    if any(token in url_l for token in ("/news", "/press", "/blog", "newsroom", "announcement")):
+    if any(
+        token in url_l
+        for token in ("/news", "/press", "/blog", "newsroom", "announcement")
+    ):
         score += 2
 
-    if any(domain in item.url for domain in (".gov", ".edu", "who.int", "nature.com", "thelancet.com", "nejm.org")):
-        score += 2
+    if any(
+        domain in item.url
+        for domain in (
+            ".gov",
+            ".edu",
+            "who.int",
+            "nature.com",
+            "thelancet.com",
+            "nejm.org",
+            "stanford.edu",
+            "ai.stanford.edu",
+            "cs.stanford.edu",
+            "mit.edu",
+            "csail.mit.edu",
+            "news.mit.edu",
+            "harvard.edu",
+            "hms.harvard.edu",
+            "seas.harvard.edu",
+        )
+    ):
+        score += 3
 
     return score
 
 
-def _prefer_recent_results(items: list[SearchResult], max_results: int) -> list[SearchResult]:
+def _prefer_recent_results(
+    items: list[SearchResult], max_results: int
+) -> list[SearchResult]:
     current_year = dt.datetime.now().year
-    recent_items = [item for item in items if _is_recent_candidate(item, current_year=current_year)]
+    recent_items = [
+        item for item in items if _is_recent_candidate(item, current_year=current_year)
+    ]
 
     if len(recent_items) >= max(4, max_results):
         return recent_items
@@ -380,7 +499,10 @@ def _is_recent_candidate(item: SearchResult, current_year: int) -> bool:
 
     url_l = item.url.lower()
     text_l = f"{item.title} {item.snippet}".lower()
-    return any(token in url_l for token in ("/news", "/press", "/blog", "newsroom", "announcement")) or any(
+    return any(
+        token in url_l
+        for token in ("/news", "/press", "/blog", "newsroom", "announcement")
+    ) or any(
         token in text_l for token in ("latest", "new", "update", "today", "recent")
     )
 

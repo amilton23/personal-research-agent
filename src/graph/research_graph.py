@@ -10,6 +10,7 @@ from langgraph.types import Send
 from src.agents.academic_researcher import academic_researcher_node
 from src.agents.corporate_researcher import corporate_researcher_node
 from src.llm_providers.openai import get_openai_llm
+from src.utils.logs import get_logger
 
 
 class ResearchState(TypedDict):
@@ -19,6 +20,7 @@ class ResearchState(TypedDict):
     messages: Annotated[list[BaseMessage], operator.add]
 
 
+logger = get_logger(__name__)
 _summarizer = get_openai_llm()
 _SUMMARY_INSTRUCTIONS = (
     "You are a senior AI healthcare analyst. "
@@ -27,15 +29,17 @@ _SUMMARY_INSTRUCTIONS = (
     "2) Industry Initiatives\n"
     "3) Opportunities and Risks\n"
     "4) What Changed Recently (newest signals)\n"
-    "5) References (deduplicated URLs only; prefer reachable/recent sources)."
+    "5) References (deduplicated URLs only; prefer reachable/recent sources and include academic sources when available)."
 )
 
 
 def start_query_node(state: ResearchState) -> dict:
+    logger.info("graph.start_query | query=%r", state["query"])
     return {"messages": [HumanMessage(content=state["query"])], "sources": []}
 
 
 def fan_out(state: ResearchState) -> list[Send]:
+    logger.info("graph.fan_out | query=%r", state["query"])
     return [
         Send("academic_researcher", {"query": state["query"]}),
         Send("corporate_researcher", {"query": state["query"]}),
@@ -43,8 +47,21 @@ def fan_out(state: ResearchState) -> list[Send]:
 
 
 def summarize_node(state: ResearchState) -> dict:
-    response = _summarizer.invoke([SystemMessage(content=_SUMMARY_INSTRUCTIONS), *state["messages"]])
-    return {"final_report": response.content, "messages": [response], "sources": _dedupe(state["sources"])}
+    logger.info(
+        "graph.summarize | messages=%s sources=%s",
+        len(state["messages"]),
+        len(state["sources"]),
+    )
+    response = _summarizer.invoke(
+        [SystemMessage(content=_SUMMARY_INSTRUCTIONS), *state["messages"]]
+    )
+    deduped = _dedupe(state["sources"])
+    logger.info("graph.summarize done | final_sources=%s", len(deduped))
+    return {
+        "final_report": response.content,
+        "messages": [response],
+        "sources": deduped,
+    }
 
 
 def _dedupe(items: list[str]) -> list[str]:

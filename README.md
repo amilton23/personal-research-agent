@@ -8,8 +8,9 @@ Simple multi-agent workflow for gathering **academic** and **corporate** interne
 - Uses **OpenRouter** as provider for both model families:
   - OpenAI model (corporate analysis + final synthesis)
   - Gemini model (academic analysis)
-- Uses a live web search utility (DuckDuckGo Lite + HTML fallback parsing).
+- Uses a live web search utility (Tavily + Google News RSS + DuckDuckGo fallbacks).
 - Prioritizes recent and reachable links to reduce stale references.
+- Academic search now includes top AI university domains (Stanford, MIT, Harvard).
 - Produces a single final report with references.
 
 ## Architecture
@@ -44,9 +45,15 @@ OPENROUTER_API_KEY=your_key_here
 
 # Optional LangSmith tracing (recommended only with a valid dedicated key)
 # LANGSMITH_TRACING=true
+# LANGCHAIN_TRACING_V2=true
 # LANGSMITH_API_KEY=lsv2_pt_xxx
 # LANGSMITH_PROJECT=personal-research-agent
 # LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+# Optional if your key is org-scoped and requires a workspace:
+# LANGSMITH_WORKSPACE_ID=<workspace-uuid>
+
+# Optional app logging verbosity
+# LOG_LEVEL=DEBUG
 ```
 
 ## Run

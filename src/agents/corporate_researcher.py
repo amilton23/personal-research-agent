@@ -4,7 +4,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.llm_providers.openai import get_openai_llm
 from src.tools.web_search import format_results, search_web
+from src.utils.logs import get_logger
 
+logger = get_logger(__name__)
 _llm = get_openai_llm()
 
 INSTRUCTIONS = (
@@ -17,6 +19,7 @@ INSTRUCTIONS = (
 
 def corporate_researcher_node(state: dict) -> dict:
     query = state["query"]
+    logger.info("corporate_researcher start | query=%r", query)
     sources = search_web(
         f"{query} (site:microsoft.com OR site:google.com OR site:ibm.com OR site:who.int OR site:fda.gov OR site:ema.europa.eu OR site:healthcareitnews.com)",
         max_results=12,
@@ -24,6 +27,7 @@ def corporate_researcher_node(state: dict) -> dict:
         verify_urls=True,
     )
 
+    logger.info("corporate_researcher sources=%s", len(sources))
     prompt = (
         f"Research question: {query}\n\n"
         "Corporate/industry web findings:\n"
@@ -31,7 +35,10 @@ def corporate_researcher_node(state: dict) -> dict:
         "Task: summarize products, deployments, regulation, and business trends, emphasizing current developments."
     )
 
-    response = _llm.invoke([SystemMessage(content=INSTRUCTIONS), HumanMessage(content=prompt)])
+    response = _llm.invoke(
+        [SystemMessage(content=INSTRUCTIONS), HumanMessage(content=prompt)]
+    )
+    logger.debug("corporate_researcher response chars=%s", len(str(response.content)))
     return {
         "messages": [response],
         "sources": [item.url for item in sources],
